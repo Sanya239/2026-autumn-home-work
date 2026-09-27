@@ -14,6 +14,10 @@ import java.util.regex.Pattern;
 public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     private static final int ID_LENGTH = 10;
     private static final int FIRST_PATH_CHARACTER = 1;
+    private static final String METHOD_GET = "GET";
+    private static final String METHOD_POST = "POST";
+    private static final String METHOD_PUT = "PUT";
+    private static final String METHOD_DELETE = "DELETE";
     private static final String LINKS_PATH = "/v0/links";
     private static final String TEXT_CONTENT_TYPE = "text/html; charset=utf-8";
     private static final String ALPHANUMERIC = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -31,34 +35,42 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         String path = exchange.getRequestURI().getPath();
-        String method = exchange.getRequestMethod();
 
         if ("/v0/status".equals(path)) {
-            respond(exchange, "GET".equals(method) ? 200 : 405, null);
+            handleStatus(exchange);
             return;
         }
         if ("/internal/users".equals(path)) {
-            if ("POST".equals(method)) {
-                handleUsers(exchange);
-            } else {
-                respond(exchange, 405, null);
-            }
+            handleUsers(exchange);
             return;
         }
         if (LINKS_PATH.equals(path) || path.startsWith(LINKS_PATH + "/")) {
-            handleLinks(exchange, path, method);
+            handleLinks(exchange);
             return;
         }
-        if ("GET".equals(method)
-            && path.length() > FIRST_PATH_CHARACTER
-            && path.indexOf('/', FIRST_PATH_CHARACTER) < 0) {
+        handleOther(exchange, path);
+    }
+
+    private void handleOther(HttpExchange exchange, String path) throws IOException {
+        String method = exchange.getRequestMethod();
+        if (METHOD_GET.equals(method)
+                && path.length() > FIRST_PATH_CHARACTER
+                && path.indexOf('/', FIRST_PATH_CHARACTER) < 0) {
             redirect(exchange, path.substring(FIRST_PATH_CHARACTER));
             return;
         }
         respond(exchange, 404, null);
     }
 
-    private void handleLinks(HttpExchange exchange, String path, String method) throws IOException {
+    private static void handleStatus(HttpExchange exchange) throws IOException {
+        String method = exchange.getRequestMethod();
+        respond(exchange, METHOD_GET.equals(method) ? 200 : 405, null);
+    }
+
+    private void handleLinks(HttpExchange exchange) throws IOException {
+        String method = exchange.getRequestMethod();
+        String path = exchange.getRequestURI().getPath();
+
         if (!isAuthenticated(exchange)) {
             exchange.getResponseHeaders().set(
                     "WWW-Authenticate", "Basic realm=\"url-shortener\", charset=\"UTF-8\""
@@ -67,7 +79,7 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
             return;
         }
         if (LINKS_PATH.equals(path)) {
-            if ("POST".equals(method)) {
+            if (METHOD_POST.equals(method)) {
                 createLink(exchange);
             } else {
                 respond(exchange, 405, null);
@@ -82,9 +94,9 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
         }
 
         switch (method) {
-            case "GET" -> getLink(exchange, id);
-            case "PUT" -> updateLink(exchange, id);
-            case "DELETE" -> {
+            case METHOD_GET -> getLink(exchange, id);
+            case METHOD_PUT -> updateLink(exchange, id);
+            case METHOD_DELETE -> {
                 linkDao.delete(id);
                 respond(exchange, 202, null);
             }
@@ -147,6 +159,11 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     }
 
     private void handleUsers(HttpExchange exchange) throws IOException {
+        String method = exchange.getRequestMethod();
+        if (!METHOD_POST.equals(method)) {
+            respond(exchange, 405, null);
+            return;
+        }
         String credentials = readBody(exchange);
         int separator = credentials.indexOf(':');
         if (separator <= 0 || credentials.endsWith(":")) {
@@ -160,16 +177,16 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     private boolean isAuthenticated(HttpExchange exchange) throws IOException {
         String authorization = exchange.getRequestHeaders().getFirst("Authorization");
         if (authorization == null
-            || !authorization.regionMatches(true, 0, BASIC_PREFIX, 0, BASIC_PREFIX.length())) {
+                || !authorization.regionMatches(true, 0, BASIC_PREFIX, 0, BASIC_PREFIX.length())) {
             return false;
         }
         try {
             String credentials = new String(
-                Base64.getDecoder().decode(authorization.substring(BASIC_PREFIX.length())), StandardCharsets.UTF_8
+                    Base64.getDecoder().decode(authorization.substring(BASIC_PREFIX.length())), StandardCharsets.UTF_8
             );
             int separator = credentials.indexOf(':');
             return separator > 0
-                && credentials.substring(separator + 1).equals(accountDao.get(credentials.substring(0, separator)));
+                    && credentials.substring(separator + 1).equals(accountDao.get(credentials.substring(0, separator)));
         } catch (IllegalArgumentException exception) {
             return false;
         }
@@ -183,8 +200,8 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
         try {
             URI uri = new URI(link);
             return link.equals(link.trim())
-                && ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
-                && uri.getHost() != null;
+                    && ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+                    && uri.getHost() != null;
         } catch (URISyntaxException exception) {
             return false;
         }
