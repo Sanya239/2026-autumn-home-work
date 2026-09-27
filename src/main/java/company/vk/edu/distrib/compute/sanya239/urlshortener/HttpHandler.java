@@ -12,10 +12,13 @@ import java.util.regex.Pattern;
 
 @SuppressWarnings("PMD.GodClass")
 public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
+    private static final int ID_LENGTH = 10;
+    private static final int FIRST_PATH_CHARACTER = 1;
     private static final String LINKS_PATH = "/v0/links";
     private static final String TEXT_CONTENT_TYPE = "text/html; charset=utf-8";
     private static final String ALPHANUMERIC = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    private static final Pattern ID_PATTERN = Pattern.compile("[a-zA-Z0-9]{10}");
+    private static final String BASIC_PREFIX = "Basic ";
+    private static final Pattern ID_PATTERN = Pattern.compile("[a-zA-Z0-9]{" + ID_LENGTH + "}");
 
     private final Dao linkDao;
     private final Dao accountDao;
@@ -43,24 +46,26 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
             return;
         }
         if (LINKS_PATH.equals(path) || path.startsWith(LINKS_PATH + "/")) {
-            if (!isAuthenticated(exchange)) {
-                exchange.getResponseHeaders().set(
-                    "WWW-Authenticate", "Basic realm=\"url-shortener\", charset=\"UTF-8\""
-                );
-                respond(exchange, 401, null);
-                return;
-            }
             handleLinks(exchange, path, method);
             return;
         }
-        if ("GET".equals(method) && path.length() > 1 && path.indexOf('/', 1) < 0) {
-            redirect(exchange, path.substring(1));
+        if ("GET".equals(method)
+            && path.length() > FIRST_PATH_CHARACTER
+            && path.indexOf('/', FIRST_PATH_CHARACTER) < 0) {
+            redirect(exchange, path.substring(FIRST_PATH_CHARACTER));
             return;
         }
         respond(exchange, 404, null);
     }
 
     private void handleLinks(HttpExchange exchange, String path, String method) throws IOException {
+        if (!isAuthenticated(exchange)) {
+            exchange.getResponseHeaders().set(
+                    "WWW-Authenticate", "Basic realm=\"url-shortener\", charset=\"UTF-8\""
+            );
+            respond(exchange, 401, null);
+            return;
+        }
         if (LINKS_PATH.equals(path)) {
             if ("POST".equals(method)) {
                 createLink(exchange);
@@ -144,7 +149,7 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     private void handleUsers(HttpExchange exchange) throws IOException {
         String credentials = readBody(exchange);
         int separator = credentials.indexOf(':');
-        if (separator <= 0 || separator == credentials.length() - 1) {
+        if (separator <= 0 || credentials.endsWith(":")) {
             respond(exchange, 422, null);
             return;
         }
@@ -154,12 +159,13 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
 
     private boolean isAuthenticated(HttpExchange exchange) throws IOException {
         String authorization = exchange.getRequestHeaders().getFirst("Authorization");
-        if (authorization == null || !authorization.regionMatches(true, 0, "Basic ", 0, 6)) {
+        if (authorization == null
+            || !authorization.regionMatches(true, 0, BASIC_PREFIX, 0, BASIC_PREFIX.length())) {
             return false;
         }
         try {
             String credentials = new String(
-                Base64.getDecoder().decode(authorization.substring(6)), StandardCharsets.UTF_8
+                Base64.getDecoder().decode(authorization.substring(BASIC_PREFIX.length())), StandardCharsets.UTF_8
             );
             int separator = credentials.indexOf(':');
             return separator > 0
@@ -185,8 +191,8 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     }
 
     private static String randomId() {
-        StringBuilder id = new StringBuilder(10);
-        for (int i = 0; i < 10; i++) {
+        StringBuilder id = new StringBuilder(ID_LENGTH);
+        for (int i = 0; i < ID_LENGTH; i++) {
             id.append(ALPHANUMERIC.charAt(ThreadLocalRandom.current().nextInt(ALPHANUMERIC.length())));
         }
         return id.toString();

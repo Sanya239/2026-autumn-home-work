@@ -3,6 +3,7 @@ package company.vk.edu.distrib.compute.sanya239.urlshortener;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
 
@@ -33,7 +34,7 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
             server.createContext("/", new HttpHandler(linkDao, accountDao));
             server.start();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         }
     }
 
@@ -44,7 +45,7 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
             accountDao.close();
             linkDao.close();
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
         }
     }
 }
