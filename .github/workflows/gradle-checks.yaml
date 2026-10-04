@@ -23,7 +23,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew test integrationTest
 
       - name: Upload build artifacts
         if: always()
