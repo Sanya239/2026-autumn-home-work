@@ -24,12 +24,15 @@ public class FileDao implements Dao<byte[]> {
         file.seek(0);
         while (file.getFilePointer() < file.length()) {
             String key = file.readUTF();
-            byte[] value = new byte[file.readInt()];
+            int size = file.readInt();
+            var value = createValue(size);
             file.readFully(value);
             storage.put(key, value);
         }
     }
-
+    private byte[] createValue(int size){
+        return new byte[size];
+    }
     @Override
     public byte[] get(String key) {
         return storage.get(key);

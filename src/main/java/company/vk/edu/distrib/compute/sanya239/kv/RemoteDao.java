@@ -13,6 +13,10 @@ import java.util.NoSuchElementException;
 
 public class RemoteDao implements Dao<String> {
     private static final String ENTITY_PATH = "/v0/entity?id=";
+    private static final int STATUS_OK = 200;
+    private static final int STATUS_CREATED = 201;
+    private static final int STATUS_ACCEPTED = 202;
+    private static final int STATUS_NOT_FOUND = 404;
 
     private final int port;
     private final HttpClient client = HttpClient.newHttpClient();
@@ -28,10 +32,10 @@ public class RemoteDao implements Dao<String> {
     public String get(String key) throws IOException {
         HttpRequest request = HttpRequest.newBuilder(endpoint(key)).GET().build();
         HttpResponse<byte[]> response = send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() == 200) {
+        if (response.statusCode() == STATUS_OK) {
             return new String(response.body(), StandardCharsets.UTF_8);
         }
-        if (response.statusCode() == 404) {
+        if (response.statusCode() == STATUS_NOT_FOUND) {
             throw new NoSuchElementException(key);
         }
         throw responseException(response.statusCode());
@@ -43,7 +47,7 @@ public class RemoteDao implements Dao<String> {
             .PUT(HttpRequest.BodyPublishers.ofString(value, StandardCharsets.UTF_8))
             .build();
         int status = send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-        if (status != 201) {
+        if (status != STATUS_CREATED) {
             throw responseException(status);
         }
     }
@@ -52,7 +56,7 @@ public class RemoteDao implements Dao<String> {
     public void delete(String key) throws IOException {
         HttpRequest request = HttpRequest.newBuilder(endpoint(key)).DELETE().build();
         int status = send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
-        if (status != 202) {
+        if (status != STATUS_ACCEPTED) {
             throw responseException(status);
         }
     }

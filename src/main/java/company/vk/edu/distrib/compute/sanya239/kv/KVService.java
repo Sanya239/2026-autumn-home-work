@@ -67,6 +67,10 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
             return;
         }
 
+        serve(exchange, method, key);
+    }
+
+    private void serve(HttpExchange exchange, String method, String key) throws IOException {
         switch (method) {
             case METHOD_GET -> get(exchange, key);
             case METHOD_PUT -> {
