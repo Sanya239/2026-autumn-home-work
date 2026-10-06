@@ -10,7 +10,7 @@ import java.util.Objects;
 
 public class UrlShortenerService implements company.vk.edu.distrib.compute.urlshortener.UrlShortenerService {
     private static final Path DATA_DIRECTORY = Path.of(
-        System.getProperty("java.io.tmpdir"), "sanya239-url-shortener"
+            System.getProperty("java.io.tmpdir"), "sanya239-url-shortener"
     );
 
     private final int port;

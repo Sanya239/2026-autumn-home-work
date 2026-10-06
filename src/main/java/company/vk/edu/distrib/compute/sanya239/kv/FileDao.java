@@ -30,9 +30,11 @@ public class FileDao implements Dao<byte[]> {
             storage.put(key, value);
         }
     }
-    private byte[] createValue(int size){
+
+    private byte[] createValue(int size) {
         return new byte[size];
     }
+
     @Override
     public byte[] get(String key) {
         return storage.get(key);

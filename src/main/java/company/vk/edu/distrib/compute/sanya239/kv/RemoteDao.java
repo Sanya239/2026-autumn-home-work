@@ -44,8 +44,8 @@ public class RemoteDao implements Dao<String> {
     @Override
     public void upsert(String key, String value) throws IOException {
         HttpRequest request = HttpRequest.newBuilder(endpoint(key))
-            .PUT(HttpRequest.BodyPublishers.ofString(value, StandardCharsets.UTF_8))
-            .build();
+                .PUT(HttpRequest.BodyPublishers.ofString(value, StandardCharsets.UTF_8))
+                .build();
         int status = send(request, HttpResponse.BodyHandlers.discarding()).statusCode();
         if (status != STATUS_CREATED) {
             throw responseException(status);
