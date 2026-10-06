@@ -20,12 +20,9 @@ public class RemoteDao implements Dao<String> {
 
     private final int port;
     private final HttpClient client = HttpClient.newHttpClient();
-    private final KVService service;
 
-    public RemoteDao(int port) throws IOException {
+    public RemoteDao(int port) {
         this.port = port;
-        service = new KVService(port);
-        service.start();
     }
 
     @Override
@@ -81,7 +78,6 @@ public class RemoteDao implements Dao<String> {
 
     @Override
     public void close() {
-        service.stop();
         client.close();
     }
 }
