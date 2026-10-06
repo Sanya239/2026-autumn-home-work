@@ -7,8 +7,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
+import company.vk.edu.distrib.compute.Dao;
 
 @SuppressWarnings("PMD.GodClass")
 public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
@@ -24,10 +26,10 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     private static final String BASIC_PREFIX = "Basic ";
     private static final Pattern ID_PATTERN = Pattern.compile("[a-zA-Z0-9]{" + ID_LENGTH + "}");
 
-    private final Dao linkDao;
-    private final Dao accountDao;
+    private final Dao<String> linkDao;
+    private final Dao<String> accountDao;
 
-    public HttpHandler(Dao linkDao, Dao accountDao) {
+    public HttpHandler(Dao<String> linkDao, Dao<String> accountDao) {
         this.linkDao = linkDao;
         this.accountDao = accountDao;
     }
@@ -114,7 +116,7 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
         String id;
         do {
             id = randomId();
-        } while (linkDao.get(id) != null);
+        } while (findLink(id) != null);
         linkDao.upsert(id, link);
 
         String shortLink = "http://localhost:" + exchange.getLocalAddress().getPort() + "/" + id;
@@ -122,7 +124,7 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
     }
 
     private void getLink(HttpExchange exchange, String id) throws IOException {
-        String link = linkDao.get(id);
+        String link = findLink(id);
         if (link == null) {
             respond(exchange, 404, null);
         } else {
@@ -136,7 +138,7 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
             respond(exchange, 422, null);
             return;
         }
-        if (linkDao.get(id) == null) {
+        if (findLink(id) == null) {
             respond(exchange, 404, null);
         } else {
             linkDao.upsert(id, link);
@@ -149,7 +151,7 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
             respond(exchange, 422, null);
             return;
         }
-        String link = linkDao.get(id);
+        String link = findLink(id);
         if (link == null) {
             respond(exchange, 404, null);
         } else {
@@ -189,6 +191,14 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
                     && credentials.substring(separator + 1).equals(accountDao.get(credentials.substring(0, separator)));
         } catch (IllegalArgumentException exception) {
             return false;
+        }
+    }
+
+    private String findLink(String id) throws IOException {
+        try {
+            return linkDao.get(id);
+        } catch (NoSuchElementException exception) {
+            return null;
         }
     }
 

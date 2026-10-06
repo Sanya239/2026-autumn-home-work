@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
+import java.util.Objects;
 
 public class UrlShortenerService implements company.vk.edu.distrib.compute.urlshortener.UrlShortenerService {
     private static final Path DATA_DIRECTORY = Path.of(
@@ -14,11 +15,19 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
 
     private final int port;
     private HttpServer server;
-    private Dao linkDao;
-    private Dao accountDao;
+    private company.vk.edu.distrib.compute.Dao<String> linksDao;
+    private company.vk.edu.distrib.compute.Dao<String> accountsDao;
 
     public UrlShortenerService(int port) {
         this.port = port;
+    }
+
+    @Override
+    public void setLinksDao(company.vk.edu.distrib.compute.Dao<String> dao) {
+        if (server != null) {
+            throw new IllegalStateException("Service is already started or stopped");
+        }
+        linksDao = Objects.requireNonNull(dao);
     }
 
     @Override
@@ -27,11 +36,13 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
             throw new IllegalStateException("Service is already started");
         }
         try {
-            accountDao = new Dao(DATA_DIRECTORY.resolve("accounts").toString());
-            linkDao = new Dao(DATA_DIRECTORY.resolve("links").toString());
+            accountsDao = new Dao(DATA_DIRECTORY.resolve("accounts").toString());
+            if (linksDao == null) {
+                linksDao = new Dao(DATA_DIRECTORY.resolve("links").toString());
+            }
             server = HttpServer.create();
             server.bind(new InetSocketAddress("localhost", port), 0);
-            server.createContext("/", new HttpHandler(linkDao, accountDao));
+            server.createContext("/", new HttpHandler(linksDao, accountsDao));
             server.start();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -42,8 +53,8 @@ public class UrlShortenerService implements company.vk.edu.distrib.compute.urlsh
     public void stop() {
         server.stop(0);
         try {
-            accountDao.close();
-            linkDao.close();
+            accountsDao.close();
+            linksDao.close();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
