@@ -26,11 +26,11 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 @ParameterizedClass(allowZeroInvocations = true)
 @ArgumentsSource(KVServiceFactoryArgumentsProvider.class)
-@EnabledIfEnvironmentVariable(named = "CURRENT_DATE", matches = "2026-(09-28|09-29|09-30|10-01|10-02|10-03|10-04|10-05|10-06)")
+@EnabledIfEnvironmentVariable(named = "CURRENT_DATE", matches = "2026-10-\\d\\d")
 class KVServiceSingleNodeTest {
 
     static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
-    static final String ENTITY_PATH = "/v0/entity/";
+    static final String ENTITY_PATH = "/v0/entity?id=";
 
     @Parameter
     AbstractHttpServiceFactory<KVService> kvServiceFactory;
@@ -45,13 +45,12 @@ class KVServiceSingleNodeTest {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             int port = randomPort();
             KVService storage = kvServiceFactory.create(port);
-            String path = ENTITY_PATH;
             storage.start();
             try {
                 runHttpCtx(HTTP_CLIENT, port, () -> {
-                    assertEquals(400, get(path).statusCode());
-                    assertEquals(400, delete(path).statusCode());
-                    assertEquals(400, update(path, new byte[]{0}).statusCode());
+                    assertEquals(400, get(ENTITY_PATH).statusCode());
+                    assertEquals(400, delete(ENTITY_PATH).statusCode());
+                    assertEquals(400, update(ENTITY_PATH, new byte[]{0}).statusCode());
                 });
             } finally {
                 storage.stop();

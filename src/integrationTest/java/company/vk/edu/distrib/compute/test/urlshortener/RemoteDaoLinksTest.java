@@ -7,7 +7,6 @@ import java.net.http.HttpResponse;
 import java.util.Collection;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -15,6 +14,7 @@ import java.util.stream.Stream;
 import company.vk.edu.distrib.compute.AbstractHttpServiceFactory;
 import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.kv.KVService;
+import company.vk.edu.distrib.compute.kv.KVServiceTest;
 import company.vk.edu.distrib.compute.kv.RemoteDaoFactory;
 import company.vk.edu.distrib.compute.kv.RemoteDaoFactoryTest;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
@@ -55,29 +55,38 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
  */
 @ParameterizedClass(allowZeroInvocations = true)
 @MethodSource("serviceDaoPairs")
-@EnabledIfEnvironmentVariable(named = "CURRENT_DATE", matches = "2026-(09-28|09-29|09-30|10-01|10-02|10-03|10-04|10-05|10-06)")
+@EnabledIfEnvironmentVariable(named = "CURRENT_DATE", matches = "2026-10-\\d\\d")
 class RemoteDaoLinksTest {
     private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
     public static final int PACKAGE_PREFIX_LEN = "company.vk.edu.distrib.compute.".length();
 
     @Parameter(0)
-    AbstractHttpServiceFactory<? extends UrlShortenerService> serviceFactory;
+    AbstractHttpServiceFactory<? extends UrlShortenerService> urlShortenerServiceFactory;
 
     @Parameter(1)
+    AbstractHttpServiceFactory<? extends KVService> kvServiceFactory;
+
+    @Parameter(2)
     RemoteDaoFactory<String> remoteDaoFactory;
 
-    int port;
+    int urlShortenerServicePort;
 
-    UrlShortenerService service;
+    int kvServicePort;
+
+    UrlShortenerService urlShortenerService;
+
+    KVService kvService;
 
     Dao<String> remoteDao;
 
     @BeforeEach
     void setup() throws IOException {
-        this.port = randomPort();
-        this.service = serviceFactory.create(port);
-        this.remoteDao = remoteDaoFactory.create(randomPort());
-        service.setLinksDao(remoteDao);
+        this.urlShortenerServicePort = randomPort();
+        this.urlShortenerService = urlShortenerServiceFactory.create(urlShortenerServicePort);
+        this.kvServicePort = randomPort(urlShortenerServicePort);
+        this.kvService = kvServiceFactory.create(kvServicePort);
+        this.remoteDao = remoteDaoFactory.create(kvServicePort);
+        urlShortenerService.setLinksDao(remoteDao);
     }
 
     @AfterAll
@@ -89,15 +98,17 @@ class RemoteDaoLinksTest {
     void getAbsent() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
+                kvService.start();
                 remoteDao.delete(TEST_LINK_ID);
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> {
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> {
                     tryCreateTestUser();
                     assertThrows(NoSuchElementException.class, () -> remoteDao.get(TEST_LINK_ID));
                     assertEquals(404, getLinks(TEST_LINK_ID).statusCode());
                 });
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
@@ -106,8 +117,9 @@ class RemoteDaoLinksTest {
     void createAndGet() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> {
+                kvService.start();
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> {
                     tryCreateTestUser();
 
                     String longLink = TEST_LONG_LINK;
@@ -115,7 +127,7 @@ class RemoteDaoLinksTest {
                     assertEquals(201, createResponse.statusCode());
                     assertEquals(CONTENT_TYPE_TEXT, header(createResponse, "Content-Type"));
 
-                    String id = extractId(port, createResponse.body());
+                    String id = extractId(urlShortenerServicePort, createResponse.body());
                     assertDoesNotThrow(() -> remoteDao.get(id));
 
                     HttpResponse<String> getResponse = getLinks(id);
@@ -124,7 +136,8 @@ class RemoteDaoLinksTest {
                     assertEquals(longLink, getResponse.body());
                 });
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
@@ -133,13 +146,14 @@ class RemoteDaoLinksTest {
     void update() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> {
+                kvService.start();
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> {
                     tryCreateTestUser();
 
                     String originalLink = TEST_LONG_LINK;
                     String updatedLink = TEST_LONG_LINK_2;
-                    String id = extractId(port, createLink(originalLink).body());
+                    String id = extractId(urlShortenerServicePort, createLink(originalLink).body());
                     assertDoesNotThrow(() -> remoteDao.get(id));
 
                     assertEquals(200, updateLink(id, updatedLink).statusCode());
@@ -147,7 +161,8 @@ class RemoteDaoLinksTest {
                     assertEquals(updatedLink, remoteDao.get(id));
                 });
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
@@ -156,14 +171,16 @@ class RemoteDaoLinksTest {
     void updateAbsent() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> {
+                kvService.start();
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> {
                     tryCreateTestUser();
                     deleteLink(TEST_LINK_ID);
                     assertEquals(404, updateLink(TEST_LINK_ID, TEST_LONG_LINK).statusCode());
                 });
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
@@ -172,18 +189,20 @@ class RemoteDaoLinksTest {
     void delete() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> {
+                kvService.start();
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> {
                     tryCreateTestUser();
 
-                    String id = extractId(port, createLink(TEST_LONG_LINK).body());
+                    String id = extractId(urlShortenerServicePort, createLink(TEST_LONG_LINK).body());
 
                     assertEquals(202, deleteLink(id).statusCode());
                     assertThrows(NoSuchElementException.class, () -> remoteDao.get(id));
                     assertEquals(404, getLinks(id).statusCode());
                 });
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
@@ -192,14 +211,16 @@ class RemoteDaoLinksTest {
     void deleteAbsent() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
+                kvService.start();
                 remoteDao.delete(TEST_LINK_ID);
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> {
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> {
                     tryCreateTestUser();
                     assertEquals(202, deleteLink(TEST_LINK_ID).statusCode());
                 });
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
@@ -208,18 +229,20 @@ class RemoteDaoLinksTest {
     void redirect() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> {
+                kvService.start();
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> {
                     tryCreateTestUser();
 
-                    String id = extractId(port, createLink(TEST_LONG_LINK).body());
+                    String id = extractId(urlShortenerServicePort, createLink(TEST_LONG_LINK).body());
                     assertDoesNotThrow(() -> remoteDao.get(id));
                     HttpResponse<String> response = get("/" + id);
                     assertEquals(301, response.statusCode());
                     assertEquals(TEST_LONG_LINK, header(response, "Location"));
                 });
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
@@ -228,22 +251,26 @@ class RemoteDaoLinksTest {
     void redirectAbsent() {
         assertTimeoutPreemptively(TIMEOUT, () -> {
             try {
-                service.start();
-                runHttpCtx(HTTP_CLIENT, port, () -> assertEquals(404, get("/oops123456").statusCode()));
+                kvService.start();
+                urlShortenerService.start();
+                runHttpCtx(HTTP_CLIENT, urlShortenerServicePort, () -> assertEquals(404, get("/oops123456").statusCode()));
             } finally {
-                service.stop();
+                urlShortenerService.stop();
+                kvService.stop();
             }
         });
     }
 
     static Stream<Arguments> serviceDaoPairs() {
-        final var urlShortenerServiceFactories = groupByPackageName(findAnnotatedFactories(UrlShortenerTest.class));
-        final var remoteDaoFactories = groupByPackageName(findAnnotatedFactories(RemoteDaoFactoryTest.class));
+        var urlShortenerServiceFactories = groupByPackageName(findAnnotatedFactories(UrlShortenerTest.class));
+        var kvServiceFactories = groupByPackageName(findAnnotatedFactories(KVServiceTest.class));
+        var remoteDaoFactories = groupByPackageName(findAnnotatedFactories(RemoteDaoFactoryTest.class));
         return urlShortenerServiceFactories.entrySet().stream()
-            .filter(it -> remoteDaoFactories.containsKey(it.getKey()))
+            .filter(it -> kvServiceFactories.containsKey(it.getKey()) && remoteDaoFactories.containsKey(it.getKey()))
             .map(it -> Arguments.of(
                 ReflectionUtils.newInstance(it.getValue()),
-                ReflectionUtils.newInstance(Objects.requireNonNull(remoteDaoFactories.get(it.getKey())))));
+                ReflectionUtils.newInstance(kvServiceFactories.get(it.getKey())),
+                ReflectionUtils.newInstance(remoteDaoFactories.get(it.getKey()))));
     }
 
     static Map<String, Class<?>> groupByPackageName(Collection<Class<?>> classes) {
