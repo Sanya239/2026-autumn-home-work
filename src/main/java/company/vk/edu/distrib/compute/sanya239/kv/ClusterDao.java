@@ -23,15 +23,11 @@ public class ClusterDao implements Dao<String> {
         return shardNumber;
     }
 
-    public ClusterDao(int... ports) {
+    public ClusterDao(int... ports) throws IOException {
         var factory = new RemoteDaoFactory();
         shards = new Dao[ports.length];
         for (int pos = 0; pos < ports.length; pos++) {
-            try {
-                shards[pos] = factory.create(ports[pos]);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            shards[pos] = factory.create(ports[pos]);
         }
     }
 
