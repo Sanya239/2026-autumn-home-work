@@ -188,8 +188,14 @@ public class HttpHandler implements com.sun.net.httpserver.HttpHandler {
                     Base64.getDecoder().decode(authorization.substring(BASIC_PREFIX.length())), StandardCharsets.UTF_8
             );
             int separator = credentials.indexOf(':');
-            return separator > 0
-                    && credentials.substring(separator + 1).equals(accountDao.get(credentials.substring(0, separator)));
+            var login = credentials.substring(0, separator);
+            try {
+                var storedPassword = accountDao.get(login);
+                return separator > 0
+                        && credentials.substring(separator + 1).equals(storedPassword);
+            } catch (Exception e) {
+                return false;
+            }
         } catch (IllegalArgumentException exception) {
             return false;
         }

@@ -27,18 +27,28 @@ public class Dao implements company.vk.edu.distrib.compute.Dao<String> {
         }
     }
 
+    private static void checkNotNull(String value, String name) {
+        if (value == null) {
+            throw new IllegalArgumentException(name + " must not be null");
+        }
+    }
+
     @Override
     public String get(String key) throws NoSuchElementException, IllegalArgumentException, IOException {
+        checkNotNull(key, "key");
         return storage.get(key);
     }
 
     @Override
     public void upsert(String key, String value) throws IllegalArgumentException, IOException {
+        checkNotNull(key, "key");
+        checkNotNull(value, "value");
         storage.put(key, value);
     }
 
     @Override
     public void delete(String key) throws IllegalArgumentException, IOException {
+        checkNotNull(key, "key");
         storage.remove(key);
     }
 
