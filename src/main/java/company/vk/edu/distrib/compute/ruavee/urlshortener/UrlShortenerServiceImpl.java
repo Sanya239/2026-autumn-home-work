@@ -10,8 +10,19 @@ import java.nio.file.Path;
 import java.nio.file.Files;
 
 public class UrlShortenerServiceImpl implements UrlShortenerService {
+    private boolean started;
+    private boolean stopped;
+    private final UrlShortenerHandler handler;
     private final HttpServer server;
     private static final int STOP_DELAY_SECONDS = 1;
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (started || stopped) {
+            throw new IllegalStateException();
+        }
+        handler.setLinksDao(dao);
+    }
 
     public UrlShortenerServiceImpl(int port) throws IOException {
         Path storageDir = Path.of(System.getProperty("java.io.tmpdir"), "ruavee-storage");
@@ -25,16 +36,19 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
 
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         BasicAuth auth = new BasicAuth(usersDao);
-        server.createContext("/", new UrlShortenerHandler(linksDao, auth, port));
+        this.handler = new UrlShortenerHandler(linksDao, auth, port);
+        server.createContext("/", handler);
     }
 
     @Override
     public void start() {
         server.start();
+        started = true;
     }
 
     @Override
     public void stop() {
         server.stop(STOP_DELAY_SECONDS);
+        stopped = true;
     }
 }

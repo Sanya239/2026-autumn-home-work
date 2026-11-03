@@ -10,11 +10,28 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.Request;
 
+import company.vk.edu.distrib.compute.sovesti.urlshortener.http.MethodConstants;
 import company.vk.edu.distrib.compute.sovesti.urlshortener.http.StatusCodeConstants;
 
 public final class HandlersSwitch implements HttpHandler {
 
     private final Map<Predicate<Request>, HttpHandler> handlers = new ConcurrentHashMap<>();
+
+    public HandlersSwitch withPost(HttpHandler handler) {
+        return with(MethodConstants.POST, handler);
+    }
+
+    public HandlersSwitch withGet(HttpHandler handler) {
+        return with(MethodConstants.GET, handler);
+    }
+
+    public HandlersSwitch withPut(HttpHandler handler) {
+        return with(MethodConstants.PUT, handler);
+    }
+
+    public HandlersSwitch withDelete(HttpHandler handler) {
+        return with(MethodConstants.DELETE, handler);
+    }
 
     public HandlersSwitch with(String method, HttpHandler handler) {
         return with(new MethodIs(method), handler);

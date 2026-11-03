@@ -29,7 +29,7 @@ public class UrlShortenerHandler implements HttpHandler {
     private static final String ROOT_PATH = "/";
 
     private final SecureRandom random = new SecureRandom();
-    private final Dao<String> dao;
+    private Dao<String> dao;
     private final BasicAuth auth;
     private final int port;
     private final ReentrantLock lock = new ReentrantLock();
@@ -38,6 +38,10 @@ public class UrlShortenerHandler implements HttpHandler {
         this.dao = dao;
         this.auth = auth;
         this.port = port;
+    }
+
+    void setLinksDao(Dao<String> dao) {
+        this.dao = dao;
     }
 
     private boolean isValidUrl(String url) {

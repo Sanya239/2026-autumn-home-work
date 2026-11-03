@@ -18,7 +18,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class UrlShortenerServiceImpl implements UrlShortenerService {
     private final HttpServer server;
     private final int port;
-    private final Dao<String> linksDao;
+    private Dao<String> linksDao;
     private final Dao<String> usersDao;
     private static final String ID_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private static final String ID_PATTERN = "[A-Za-z0-9]{10}";
@@ -29,6 +29,7 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
     private static final String GET_METHOD = "GET";
     private static final String PUT_METHOD = "PUT";
     private static final String DELETE_METHOD = "DELETE";
+    private boolean startedOrStopped;
 
     private boolean isValidLink(String link) {
         try {
@@ -241,11 +242,21 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
 
     @Override
     public void start() {
+        startedOrStopped = true;
         server.start();
     }
 
     @Override
     public void stop() {
+        startedOrStopped = true;
         server.stop(5);
+    }
+
+    @Override
+    public void setLinksDao(Dao<String> dao) {
+        if (startedOrStopped) {
+            throw new IllegalStateException();
+        }
+        this.linksDao = dao;
     }
 }

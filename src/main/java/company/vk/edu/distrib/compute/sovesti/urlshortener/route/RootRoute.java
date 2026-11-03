@@ -9,7 +9,6 @@ import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.sovesti.urlshortener.handler.HandlersSwitch;
 import company.vk.edu.distrib.compute.sovesti.urlshortener.handler.Response;
 import company.vk.edu.distrib.compute.sovesti.urlshortener.http.HeaderConstants;
-import company.vk.edu.distrib.compute.sovesti.urlshortener.http.MethodConstants;
 import company.vk.edu.distrib.compute.sovesti.urlshortener.http.StatusCodeConstants;
 
 public final class RootRoute implements HttpRoute {
@@ -27,7 +26,7 @@ public final class RootRoute implements HttpRoute {
 
     @Override
     public HttpHandler handler() {
-        return new HandlersSwitch().with(MethodConstants.GET, exchange -> {
+        return new HandlersSwitch().withGet(exchange -> {
             exchange.getResponseHeaders().add(HeaderConstants.LOCATION, links.get(new LinkId().find(exchange)));
             new Response(StatusCodeConstants.MOVED_PERMANENTLY).accept(exchange);
         });

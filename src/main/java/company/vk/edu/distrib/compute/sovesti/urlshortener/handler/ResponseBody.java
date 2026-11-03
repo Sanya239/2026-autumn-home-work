@@ -23,17 +23,21 @@ public interface ResponseBody {
 
     }
 
-    record Plain(String body) implements ResponseBody {
+    record Plain(byte[] bytes) implements ResponseBody {
+
+        public Plain(String encoded) {
+            this(encoded.getBytes());
+        }
 
         @Override
         public void write(OutputStream out) throws IOException {
-            out.write(body.getBytes());
+            out.write(bytes);
             out.flush();
         }
 
         @Override
         public long length() {
-            return body.getBytes().length;
+            return bytes.length;
         }
 
     }

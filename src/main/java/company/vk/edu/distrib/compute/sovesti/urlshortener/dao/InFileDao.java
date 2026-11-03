@@ -1,9 +1,7 @@
 package company.vk.edu.distrib.compute.sovesti.urlshortener.dao;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -12,16 +10,16 @@ import java.util.Objects;
 
 import company.vk.edu.distrib.compute.Dao;
 
-public final class InFileDao implements Dao<String> {
+public final class InFileDao implements Dao<byte[]> {
 
     private final Path path;
-    private final PrintWriter write;
+    private final StorageOutputStream write;
     private final DaoOperations operations;
-    private final Dao<String> memory;
+    private final Dao<byte[]> memory;
 
     public InFileDao(Path path) throws IOException {
         this.path = Objects.requireNonNull(path);
-        write = new PrintWriter(open(path), true);
+        write = new StorageOutputStream(open(path));
         operations = new DaoOperations();
         memory = new InMemoryDao<>();
     }
@@ -31,8 +29,8 @@ public final class InFileDao implements Dao<String> {
     }
 
     public void read() throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(path)) {
-            operations.fill(reader.lines());
+        try (StorageInputStream in = new StorageInputStream(Files.newInputStream(path))) {
+            operations.fill(in);
         }
         operations.execute(memory);
     }
@@ -44,12 +42,12 @@ public final class InFileDao implements Dao<String> {
     }
 
     @Override
-    public String get(String key) throws NoSuchElementException, IOException {
+    public byte[] get(String key) throws NoSuchElementException, IOException {
         return memory.get(key);
     }
 
     @Override
-    public void upsert(String key, String value) throws IOException {
+    public void upsert(String key, byte[] value) throws IOException {
         addOperation(new DaoOperation.Upsert(key, value));
     }
 
@@ -61,6 +59,6 @@ public final class InFileDao implements Dao<String> {
     private void addOperation(DaoOperation op) throws IOException {
         operations.add(op);
         op.execute(memory);
-        write.println(new KeyValuePair(op.label(), op.serialized()).raw());
+        op.serialize(write);
     }
 }

@@ -6,30 +6,21 @@ import company.vk.edu.distrib.compute.Dao;
 
 public sealed interface DaoOperation {
 
-    String UPSERT = "UPSERT";
-    String DELETE = "DELETE";
+    void execute(Dao<byte[]> dao) throws IOException;
 
-    String label();
+    void serialize(StorageOutputStream out) throws IOException;
 
-    void execute(Dao<String> dao) throws IOException;
-
-    String serialized();
-
-    record Upsert(String key, String value) implements DaoOperation {
+    record Upsert(String key, byte[] value) implements DaoOperation {
 
         @Override
-        public String label() {
-            return UPSERT;
-        }
-
-        @Override
-        public void execute(Dao<String> dao) throws IOException {
+        public void execute(Dao<byte[]> dao) throws IOException {
             dao.upsert(key, value);
         }
 
         @Override
-        public String serialized() {
-            return new KeyValuePair(key, value).raw();
+        public void serialize(StorageOutputStream out) throws IOException {
+            out.write(key);
+            out.write(value);
         }
 
     }
@@ -37,18 +28,14 @@ public sealed interface DaoOperation {
     record Delete(String key) implements DaoOperation {
 
         @Override
-        public String label() {
-            return DELETE;
-        }
-
-        @Override
-        public void execute(Dao<String> dao) throws IOException {
+        public void execute(Dao<byte[]> dao) throws IOException {
             dao.delete(key);
         }
 
         @Override
-        public String serialized() {
-            return key;
+        public void serialize(StorageOutputStream out) throws IOException {
+            out.write(key);
+            out.writeNiche();
         }
 
     }

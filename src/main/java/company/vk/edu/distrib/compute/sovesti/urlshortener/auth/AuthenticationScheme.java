@@ -17,4 +17,18 @@ public interface AuthenticationScheme {
         boolean check() throws IOException;
 
     }
+
+    final class Transient implements AuthenticationScheme {
+
+        @Override
+        public Optional<Credentials> parse(Request request) {
+            return Optional.of(() -> true);
+        }
+
+        @Override
+        public String challenge() {
+            return "";
+        }
+
+    }
 }

@@ -33,4 +33,18 @@ public interface ExchangeAttribute<T> {
         }
 
     }
+
+    final class QueryAttribute implements ExchangeAttribute<HttpQueryFields> {
+
+        @Override
+        public String key() {
+            return "query";
+        }
+
+        @Override
+        public Class<HttpQueryFields> type() {
+            return HttpQueryFields.class;
+        }
+
+    }
 }

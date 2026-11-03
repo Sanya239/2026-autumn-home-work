@@ -4,6 +4,8 @@ import java.util.Random;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import company.vk.edu.distrib.compute.sovesti.urlshortener.handler.BadRequestException;
+
 final class RandomId implements Supplier<String> {
 
     private final Random random = new Random();
@@ -19,10 +21,17 @@ final class RandomId implements Supplier<String> {
     }
 
     String throwIfInvalid(String id) {
-        if (SIZE != id.length() || !id.chars().allMatch(this::valid)) {
-            throw new IllegalArgumentException("Invalid id: %s".formatted(id));
+        if (id.isEmpty()) {
+            throw new BadRequestException(error(id));
+        }
+        if (!id.chars().allMatch(this::valid)) {
+            throw new IllegalArgumentException(error(id));
         }
         return id;
+    }
+
+    private String error(String id) {
+        return "Invalid id: %s".formatted(id);
     }
 
     private boolean valid(int character) {

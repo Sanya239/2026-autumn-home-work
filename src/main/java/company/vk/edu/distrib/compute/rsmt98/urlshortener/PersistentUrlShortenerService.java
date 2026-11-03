@@ -2,6 +2,7 @@ package company.vk.edu.distrib.compute.rsmt98.urlshortener;
 
 import com.sun.net.httpserver.HttpServer;
 
+import company.vk.edu.distrib.compute.Dao;
 import company.vk.edu.distrib.compute.urlshortener.UrlShortenerService;
 
 import org.jspecify.annotations.Nullable;
@@ -11,6 +12,7 @@ import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.Lock;
@@ -33,7 +35,7 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
     private boolean stopCalled;
     @Nullable private HttpServer server;
     @Nullable private ExecutorService executor;
-    @Nullable private FileStringDao linkDao;
+    @Nullable private Dao<String> linkDao;
     @Nullable private FileStringDao userDao;
 
     public PersistentUrlShortenerService(int port) {
@@ -41,16 +43,38 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
     }
 
     @Override
+    public void setLinksDao(Dao<String> dao) {
+        lock.lock();
+        try {
+            if (stopCalled) {
+                throw new IllegalStateException("Service is already stopped");
+            }
+            if (startCalled) {
+                throw new IllegalStateException(
+                        "Links storage must be set before starting the service");
+            }
+            linkDao = dao;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
     public void start() {
         lock.lock();
         try {
+            if (stopCalled) {
+                throw new IllegalStateException("Service is already stopped");
+            }
             if (startCalled) {
                 throw new IllegalStateException("Service can only be started once");
             }
             startCalled = true;
             try {
-                FileStringDao links = new FileStringDao(DATA_DIR.resolve("links"));
-                linkDao = links;
+                if (linkDao == null) {
+                    linkDao = new FileStringDao(DATA_DIR.resolve("links"));
+                }
+                final Dao<String> links = linkDao;
                 FileStringDao users = new FileStringDao(DATA_DIR.resolve("users"));
                 userDao = users;
                 HttpServer httpServer =
@@ -65,7 +89,7 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
                                 port,
                                 links,
                                 users,
-                                () -> links.isAvailable() && users.isAvailable()));
+                                () -> linksAvailable(links) && users.isAvailable()));
                 httpServer.start();
             } catch (IOException | RuntimeException e) {
                 try {
@@ -84,7 +108,7 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
     public void stop() {
         lock.lock();
         try {
-            if (!startCalled || stopCalled) {
+            if (stopCalled) {
                 return;
             }
             stopCalled = true;
@@ -95,7 +119,7 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
     }
 
     private void closeResources() {
-        FileStringDao links = linkDao;
+        Dao<String> links = linkDao;
         FileStringDao users = userDao;
         ExecutorService workers = executor;
         try (links;
@@ -107,6 +131,20 @@ public final class PersistentUrlShortenerService implements UrlShortenerService 
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot close URL shortener storage", e);
+        }
+    }
+
+    private static boolean linksAvailable(Dao<String> links) {
+        if (links instanceof FileStringDao localLinks) {
+            return localLinks.isAvailable();
+        }
+        try {
+            links.get("LINKS_HEALTH_CHECK");
+            return true;
+        } catch (NoSuchElementException e) {
+            return true;
+        } catch (IOException e) {
+            return false;
         }
     }
 }
