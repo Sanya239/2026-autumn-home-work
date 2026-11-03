@@ -184,17 +184,23 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
             return;
         }
 
+        serveExternal(exchange, method, key);
+    }
+
+    private void serveExternal(HttpExchange exchange, String method, String key) throws IOException {
         String cluster = System.getProperty(CLUSTER_PROPERTY);
         if (cluster == null || cluster.isBlank()) {
             serveInternal(exchange, method, key);
             return;
         }
 
-        int[] ports;
-        int replicationFactor;
+        serveReplicated(exchange, method, key, cluster);
+    }
+
+    private void serveReplicated(HttpExchange exchange, String method, String key, String cluster) throws IOException {
+        ClusterConfiguration configuration;
         try {
-            ports = parsePorts(cluster);
-            replicationFactor = replicationFactor(ports.length);
+            configuration = readConfiguration(cluster);
         } catch (IllegalArgumentException exception) {
             respond(exchange, STATUS_INTERNAL_ERROR, null);
             return;
@@ -202,29 +208,50 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
 
         int ack;
         try {
-            ack = extractAck(exchange);
+            ack = readAck(exchange, configuration.replicationFactor());
         } catch (IllegalArgumentException exception) {
             respond(exchange, STATUS_BAD_REQUEST, null);
             return;
         }
-        if (ack < DEFAULT_ACK || ack > replicationFactor) {
-            respond(exchange, STATUS_BAD_REQUEST, null);
-            return;
-        }
 
+        ReplicaResponse response = replicate(exchange, method, key, ack, configuration);
+        respond(exchange, response.status(), response.body());
+    }
+
+    private ReplicaResponse replicate(
+            HttpExchange exchange,
+            String method,
+            String key,
+            int ack,
+            ClusterConfiguration configuration
+    ) throws IOException {
         byte[] body = METHOD_PUT.equals(method) ? exchange.getRequestBody().readAllBytes() : EMPTY_BODY;
         BlockingQueue<ReplicaResponse> responses = new LinkedBlockingQueue<>();
+        sendToReplicas(method, key, body, configuration, responses);
+        return new ResponseCollector(method, ack, configuration.replicationFactor(), responses).collect();
+    }
+
+    private void sendToReplicas(
+            String method,
+            String key,
+            byte[] body,
+            ClusterConfiguration configuration,
+            BlockingQueue<ReplicaResponse> responses
+    ) {
+        int[] ports = configuration.ports();
         int startShard = selectShard(key, ports);
-        for (int attempt = 0; attempt < replicationFactor; attempt++) {
+        for (int attempt = 0; attempt < configuration.replicationFactor(); attempt++) {
             int targetPort = ports[(startShard + attempt) % ports.length];
             CompletableFuture<ReplicaResponse> request = targetPort == port
                     ? CompletableFuture.completedFuture(executeLocally(method, key, body))
                     : sendInternalRequest(method, key, body, targetPort);
             request.thenAccept(responses::add);
         }
+    }
 
-        ReplicaResponse response = new ResponseCollector(method, ack, replicationFactor, responses).collect();
-        respond(exchange, response.status(), response.body());
+    private static ClusterConfiguration readConfiguration(String cluster) {
+        int[] ports = parsePorts(cluster);
+        return new ClusterConfiguration(ports, replicationFactor(ports.length));
     }
 
     private static boolean isEntityMethod(String method) {
@@ -234,6 +261,14 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
     private static int extractAck(HttpExchange exchange) {
         String ack = extractParameter(exchange, ACK_PARAMETER);
         return ack == null ? DEFAULT_ACK : Integer.parseInt(ack);
+    }
+
+    private static int readAck(HttpExchange exchange, int replicationFactor) {
+        int ack = extractAck(exchange);
+        if (ack < DEFAULT_ACK || ack > replicationFactor) {
+            throw new IllegalArgumentException("Invalid ack");
+        }
+        return ack;
     }
 
     private static int[] parsePorts(String cluster) {
@@ -316,6 +351,9 @@ public class KVService implements company.vk.edu.distrib.compute.kv.KVService {
     }
 
     private record ReplicaResponse(int status, byte[] body) {
+    }
+
+    private record ClusterConfiguration(int[] ports, int replicationFactor) {
     }
 
     private record ResponseCollector(
