@@ -5,7 +5,7 @@ local headers = {
 
 request = function()
   counter = counter + 1
-  local path = "/v0/entity?id=load-" .. counter
+  local path = "/v0/entity?id=load-" .. counter .. "&ack=3"
   local body = "value-" .. counter
   return wrk.format("PUT", path, headers, body)
 end
